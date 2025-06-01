@@ -1,5 +1,5 @@
 import subprocess
-import os, time
+import time
 
 start_time = time.time()  # 开始计时
 

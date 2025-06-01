@@ -9,9 +9,11 @@ def get_out_dir(config, base_dir="./out"):
     """
     根据 config 生成唯一输出目录（如 k20_hop5、k20_hop5_1 等）
     """
-    k_top = getattr(config, "k_top", "unknown")
-    num_hops = getattr(config, "num_hops", "unknown")
-    base_folder_name = f"k{k_top}_hop{num_hops}"
+    dataset = getattr(config, "dataset", "unknown")
+    k_min = getattr(config.scoresampler, "k_min", "unknown")
+    num_hops = getattr(config.scoresampler, "num_hops", "unknown")
+    version = getattr(config, "version", "unknown")
+    base_folder_name = f"{dataset}_k{k_min}_hop{num_hops}_{version}"
     out_dir = os.path.join(base_dir, base_folder_name)
 
     if not os.path.exists(out_dir):
@@ -29,9 +31,11 @@ def get_out_dir(config, base_dir="./out"):
 
 
 def get_existing_out_dir(config, base_dir="./out"):
-    k_top = getattr(config, "k_top", "unknown")
-    num_hops = getattr(config, "num_hops", "unknown")
-    base_folder_name = f"k{k_top}_hop{num_hops}"
+    dataset = getattr(config, "dataset", "unknown")
+    k_min = getattr(config.scoresampler, "k_min", "unknown")
+    num_hops = getattr(config.scoresampler, "num_hops", "unknown")
+    version = getattr(config, "version", "unknown")
+    base_folder_name = f"{dataset}_k{k_min}_hop{num_hops}_{version}"
 
     # 查找所有匹配的目录
     matching_dirs = []
@@ -46,7 +50,7 @@ def get_existing_out_dir(config, base_dir="./out"):
                 continue
 
     if not matching_dirs:
-        raise FileNotFoundError(f"No folder found for config k{k_top}_hop{num_hops}")
+        raise FileNotFoundError(f"No folder found for config k{k_min}_hop{num_hops}")
 
     # 返回编号最大的目录
     max_idx_dir = max(matching_dirs, key=lambda x: x[0])[1]

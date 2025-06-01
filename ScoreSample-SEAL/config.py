@@ -7,17 +7,20 @@ from model.score_gnn import (
 )
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-train_data = torch.load("./data/Cora/split/train_data.pt").to(device)
+# device = torch.device("cpu")
+# train_data = torch.load(f"./data/{dataset}/split/train_data.pt").to(device)
 
 
 @dataclass
 class ScoreGNNConfig:
+    gnn_type: str = "gat"
     hidden_dim: int = 256
     output_dim: int = 128
     num_layers: int = 3
     dropout: float = 0.5
     lr: float = 0.01
     epochs: int = 200
+    predictor: object = HadamardMLPPredictor(input_dim=128).to(device)
 
 
 @dataclass
@@ -30,13 +33,24 @@ class ScoreSampleSEALConfig:
 
 
 @dataclass
+class ScoreSamplerConfig:
+    k_min: int = 60
+    alpha: int = 40
+    beta: int = 20
+    gamma: int = 2
+    num_hops: int = 2
+    score_fn: str = "gnn"
+
+
+@dataclass
 class Config:
-    drnl: bool = True
+    version: str = "PubMed"
+    dataset: str = "PubMed"
     seed: int = 2025
-    data_init_num_features: int = train_data.num_features
+    data_init_num_features: int = (
+        torch.load(f"./data/{dataset}/split/train_data.pt").to(device).num_features
+    )
     device: torch.device = device
     scoregnn: ScoreGNNConfig = field(default_factory=ScoreGNNConfig)
-    predictor: object = HadamardMLPPredictor(input_dim=128).to(device)
-    k_top: int = 80
-    num_hops: int = 3
     ssseal: ScoreSampleSEALConfig = field(default_factory=ScoreSampleSEALConfig)
+    scoresampler: ScoreSamplerConfig = field(default_factory=ScoreSamplerConfig)

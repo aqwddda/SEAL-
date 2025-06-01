@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 import torch.nn as nn
-from torch_geometric.nn import GCNConv
+from torch_geometric.nn import GCNConv, GATConv, SAGEConv, GINConv
 import torch.nn.functional as F
 
 seed = 2025
@@ -10,7 +10,7 @@ np.random.seed(seed)
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 
-class ScoreGNN(nn.Module):
+class ScoreGCN(nn.Module):
     def __init__(self, input_dim, hidden_dim, output_dim, num_layers=3, dropout=0.5):
         super().__init__()
         self.convs = nn.ModuleList()
@@ -42,6 +42,125 @@ class ScoreGNN(nn.Module):
         # 最后一层没有加bn和dropout
         out = self.convs[-1](h, edge_index)
 
+        return out
+
+
+class ScoreSAGE(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, num_layers=3, dropout=0.5):
+        super().__init__()
+        self.convs = nn.ModuleList()
+        self.convs.append(SAGEConv(input_dim, hidden_dim))
+        for _ in range(num_layers - 2):
+            self.convs.append(SAGEConv(hidden_dim, hidden_dim))
+        self.convs.append(SAGEConv(hidden_dim, output_dim))
+        self.bns = nn.ModuleList(
+            [nn.BatchNorm1d(hidden_dim) for _ in range(num_layers - 1)]
+        )
+        self.drops = nn.ModuleList([nn.Dropout(dropout) for _ in range(num_layers - 1)])
+
+    def reset_parameters(self):
+        for conv in self.convs:
+            conv.reset_parameters()
+        for bn in self.bns:
+            bn.reset_parameters()
+
+    def forward(self, x, edge_index):
+
+        h = x
+
+        for i in range(len(self.convs) - 1):
+            h = self.convs[i](h, edge_index)
+            h = self.bns[i](h)
+            h = F.relu(h)
+            h = self.drops[i](h)
+
+        # 最后一层没有加bn和dropout
+        out = self.convs[-1](h, edge_index)
+
+        return out
+
+
+class ScoreGAT(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, num_layers=3, dropout=0.5):
+        super().__init__()
+        self.convs = nn.ModuleList()
+        self.convs.append(GATConv(input_dim, hidden_dim))
+        for _ in range(num_layers - 2):
+            self.convs.append(GATConv(hidden_dim, hidden_dim))
+        self.convs.append(GATConv(hidden_dim, output_dim))
+        self.bns = nn.ModuleList(
+            [nn.BatchNorm1d(hidden_dim) for _ in range(num_layers - 1)]
+        )
+        self.drops = nn.ModuleList([nn.Dropout(dropout) for _ in range(num_layers - 1)])
+
+    def reset_parameters(self):
+        for conv in self.convs:
+            conv.reset_parameters()
+        for bn in self.bns:
+            bn.reset_parameters()
+
+    def forward(self, x, edge_index):
+
+        h = x
+
+        for i in range(len(self.convs) - 1):
+            h = self.convs[i](h, edge_index)
+            h = self.bns[i](h)
+            h = F.relu(h)
+            h = self.drops[i](h)
+
+        # 最后一层没有加bn和dropout
+        out = self.convs[-1](h, edge_index)
+
+        return out
+
+
+class ScoreGIN(nn.Module):
+    def __init__(self, input_dim, hidden_dim, output_dim, num_layers=3, dropout=0.5):
+        super().__init__()
+        self.convs = nn.ModuleList()
+        # 第一层
+        self.convs.append(
+            GINConv(
+                nn.Sequential(
+                    nn.Linear(input_dim, hidden_dim),
+                    nn.ReLU(),
+                    nn.Linear(hidden_dim, hidden_dim),
+                )
+            )
+        )
+        # 中间层
+        for _ in range(num_layers - 2):
+            self.convs.append(
+                GINConv(
+                    nn.Sequential(
+                        nn.Linear(hidden_dim, hidden_dim),
+                        nn.ReLU(),
+                        nn.Linear(hidden_dim, hidden_dim),
+                    )
+                )
+            )
+        # 最后一层
+        self.convs.append(GINConv(nn.Sequential(nn.Linear(hidden_dim, output_dim))))
+        self.bns = nn.ModuleList(
+            [nn.BatchNorm1d(hidden_dim) for _ in range(num_layers - 1)]
+        )
+        self.drops = nn.ModuleList([nn.Dropout(dropout) for _ in range(num_layers - 1)])
+
+    def reset_parameters(self):
+        for conv in self.convs:
+            conv.reset_parameters()
+        for bn in self.bns:
+            bn.reset_parameters()
+
+    def forward(self, x, edge_index):
+        h = x
+        for i in range(len(self.convs) - 1):
+            h = self.convs[i](h, edge_index)
+            h = self.bns[i](h)
+            h = F.relu(h)
+            h = self.drops[i](h)
+        out = self.convs[-1](h, edge_index)
         return out
 
 
@@ -96,3 +215,6 @@ class ConcatMLPPredictor(nn.Module):
         # Concatenate embeddings
         h = torch.cat([out[src], out[dst]], dim=-1)
         return self.mlp(h).view(-1)
+
+
+scoregnn_dict = {"gcn": ScoreGCN, "gat": ScoreGAT, "sage": ScoreSAGE, "gin": ScoreGIN}
